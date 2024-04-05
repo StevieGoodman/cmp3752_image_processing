@@ -1,8 +1,13 @@
-// Compute histogram
-kernel void compute_histogram(global const uchar* input, global uchar* output) {
+// Computes the frequency of each intensity value from the input image buffer and stores them in the output buffer.
+kernel void compute_histogram(global const uchar* input, global int output[256]) {
 	int id = get_global_id(0);
+	int image_size = get_global_size(0) / 3; // Each image consists of 3 colour channels
+	int colour_channel = id / image_size; // 0 - Y, 1 - Cb, 2 - Cr
+	if (colour_channel != 0) {
+		return;
+	}
 	int intensity = input[id];
-	output[intensity] += 1;
+	atomic_inc(&output[intensity]);
 }
 
 

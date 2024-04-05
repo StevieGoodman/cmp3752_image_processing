@@ -36,6 +36,7 @@ int main(int argc, char** argv) {
 	try {
 		CImg<unsigned char> image_input(image_filename.c_str());
 		CImgDisplay disp_input(image_input, "input");
+		image_input = image_input.RGBtoYCbCr(); // Converts to YCbCr for easy intensity calculation.
 
 		//Part 3 - host operations
 		//3.1 Select computing devices
@@ -69,7 +70,7 @@ int main(int argc, char** argv) {
 
 		//device - buffers
 		cl::Buffer dev_image_input(context, CL_MEM_READ_ONLY, image_input.size());
-		cl::Buffer histogram_output(context, CL_MEM_READ_WRITE, image_input.spectrum());
+		cl::Buffer histogram_output(context, CL_MEM_READ_WRITE, 256 * sizeof(int));
 		//cl::Buffer dev_image_output(context, CL_MEM_READ_WRITE, image_input.size()); //should be the same as input image
 
 		//4.1 Copy images to device memory
@@ -79,12 +80,11 @@ int main(int argc, char** argv) {
 		cl::Kernel kernel = cl::Kernel(program, "compute_histogram");
 		kernel.setArg(0, dev_image_input);
 		kernel.setArg(1, histogram_output);
-
 		queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(image_input.size()), cl::NullRange);
-
-		vector<unsigned char> output_buffer(256);
+		
 		//4.3 Copy the result from device to host
-		queue.enqueueReadBuffer(histogram_output, CL_TRUE, 0, output_buffer.size() * sizeof(unsigned char), &output_buffer.data()[0]);
+		vector<int> output_buffer(256);
+		queue.enqueueReadBuffer(histogram_output, CL_TRUE, 0, 256 * sizeof(int), output_buffer.data());
 
 		//CImg<unsigned char> output_image(output_buffer.data(), image_input.width(), image_input.height(), image_input.depth(), image_input.spectrum());
 		//CImgDisplay disp_output(output_image, "output");
