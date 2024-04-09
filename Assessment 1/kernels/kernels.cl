@@ -5,12 +5,10 @@ kernel void create_intensity_histogram(global const uchar* input, global int* ou
 	atomic_inc(&output[intensity]);
 }
 
-// 2. Performs histogram equalisation, but does NOT apply it to an image
-// 3. Normalize cumulative histogram
-// 4. Map histogram colour intensities
-kernel void histogram_to_normalised_cdf(global int* input, global int* output) {
+// 2. Creates a culumative histogram from a non-cumulative histogram by employing a Hillis-Steele scan
+// NOTE: Is "cumultate" even a verb? Oh well!
+kernel void cumulate_histogram(global int* input, global int* output) {
 	int gid = get_global_id(0);
-	// 2. Create cumulative histogram
 	int gsize = get_global_size(0);
 	global int* swap_buffer;
 	for (int stride = 1; stride <= gsize; stride *= 2) {
@@ -24,9 +22,12 @@ kernel void histogram_to_normalised_cdf(global int* input, global int* output) {
 		input = output;
 		output = swap_buffer;
 	}
-	// 3. Normalize cumulative histogram
+	
+	const int PIXEL_COUNT = 360*480;
+	output[gid] /= PIXEL_COUNT;
 }
 
+// 3. Normalize cumulative histogram
 // 4. Map image pixels to CDF intensities
 kernel void map_cdf_to_image(global const uchar* input_image, global const int* histogram, global uchar* output_image) {
 

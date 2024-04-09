@@ -41,7 +41,7 @@ vector<int> create_intensity_histogram(cl::Program& program, cl::Context& contex
 	return histogram;
 }
 
-vector<int> histogram_to_normalised_cdf(cl::Program& program, cl::Context& context, cl::CommandQueue& queue, vector<int> histogram) {
+vector<int> cumulate_histogram(cl::Program& program, cl::Context& context, cl::CommandQueue& queue, vector<int> histogram) {
 	const int BUFFER_SIZE = histogram.size() * sizeof(int);
 
 	// 1. Create buffers and load image to device memory
@@ -50,7 +50,7 @@ vector<int> histogram_to_normalised_cdf(cl::Program& program, cl::Context& conte
 	queue.enqueueWriteBuffer(input_buffer, CL_TRUE, 0, BUFFER_SIZE, histogram.data());
 
 	// 2. Load and execute kernel
-	cl::Kernel kernel = cl::Kernel(program, "histogram_to_normalised_cdf");
+	cl::Kernel kernel = cl::Kernel(program, "cumulate_histogram");
 	kernel.setArg(0, input_buffer);
 	kernel.setArg(1, output_buffer);
 	queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(256), cl::NullRange);
@@ -105,10 +105,10 @@ int main(int argc, char** argv) {
 
 		// 3. Perform histogram equalisation
 		auto intensity_histogram = create_intensity_histogram(program, context, queue, image_input);
-		auto cdf = histogram_to_normalised_cdf(program, context, queue, intensity_histogram);
-		for (size_t intensity = 0; intensity < cdf.size(); intensity++)
+		auto cumulative_histogram = cumulate_histogram(program, context, queue, intensity_histogram);
+		for (size_t intensity = 0; intensity < cumulative_histogram.size(); intensity++)
 		{
-			cout << "Intensity: " << intensity << ", count: " << cdf.at(intensity) << endl;
+			cout << "Intensity: " << intensity << ", count: " << cumulative_histogram.at(intensity) << endl;
 		}
 
 		cout << "Width: " << image_input.width() << ", Height: " << image_input.height() << ", Pixels: " << image_input.width() * image_input.height() << endl;
