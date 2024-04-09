@@ -29,6 +29,6 @@ kernel void cumulate_histogram(global int* input, global int* output) {
 
 // 3. Normalize cumulative histogram
 // 4. Map image pixels to CDF intensities
-kernel void map_cdf_to_image(global const uchar* input_image, global const int* histogram, global uchar* output_image) {
+kernel void map_cumulative_histogram_to_image(global const uchar* input_image, global const int* histogram, global uchar* output_image) {
 
 }

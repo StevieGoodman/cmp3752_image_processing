@@ -56,11 +56,11 @@ vector<int> cumulate_histogram(cl::Program& program, cl::Context& context, cl::C
 	queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(256), cl::NullRange);
 
 	// 3. Retrieve output from device memory
-	vector<int> cdf(histogram.size());
+	vector<int> cumulative_histogram(histogram.size());
 	queue.enqueueReadBuffer(output_buffer, CL_TRUE, 0, BUFFER_SIZE, cdf.data());
 
 	// 4. Return result
-	return cdf;
+	return cumulative_histogram;
 }
 
 int main(int argc, char** argv) {
