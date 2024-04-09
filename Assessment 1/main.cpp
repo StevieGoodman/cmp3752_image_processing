@@ -83,7 +83,6 @@ int main(int argc, char** argv) {
 
 		// 3. Perform histogram equalisation
 		auto intensity_histogram = CreateIntensityHistogram(program, context, queue, image_input);
-		cout << intensity_histogram.size();
 		for (size_t intensity = 0; intensity < intensity_histogram.size(); intensity++)
 		{
 			cout << "Intensity: " << intensity << ", count: " << intensity_histogram.at(intensity) << endl;
