@@ -17,7 +17,7 @@ void print_help() {
 	std::cerr << "  -h : print this message" << std::endl;
 }
 
-vector<int> CreateIntensityHistogram(cl::Program& program, cl::Context& context, cl::CommandQueue& queue, cimg_library::CImg<unsigned char> from) {
+vector<int> create_intensity_histogram(cl::Program& program, cl::Context& context, cl::CommandQueue& queue, cimg_library::CImg<unsigned char> from) {
 	const int BIN_COUNT = 256 * sizeof(int);
 
 	// 1. Create buffers and load image to device memory
@@ -39,6 +39,28 @@ vector<int> CreateIntensityHistogram(cl::Program& program, cl::Context& context,
 
 	// 4. Return result
 	return histogram;
+}
+
+vector<int> histogram_to_normalised_cdf(cl::Program& program, cl::Context& context, cl::CommandQueue& queue, vector<int> histogram) {
+	const int BUFFER_SIZE = histogram.size() * sizeof(int);
+
+	// 1. Create buffers and load image to device memory
+	cl::Buffer input_buffer(context, CL_MEM_READ_WRITE, BUFFER_SIZE);
+	cl::Buffer output_buffer(context, CL_MEM_READ_WRITE, BUFFER_SIZE);
+	queue.enqueueWriteBuffer(input_buffer, CL_TRUE, 0, BUFFER_SIZE, histogram.data());
+
+	// 2. Load and execute kernel
+	cl::Kernel kernel = cl::Kernel(program, "histogram_to_normalised_cdf");
+	kernel.setArg(0, input_buffer);
+	kernel.setArg(1, output_buffer);
+	queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(256), cl::NullRange);
+
+	// 3. Retrieve output from device memory
+	vector<int> cdf(histogram.size());
+	queue.enqueueReadBuffer(output_buffer, CL_TRUE, 0, BUFFER_SIZE, cdf.data());
+
+	// 4. Return result
+	return cdf;
 }
 
 int main(int argc, char** argv) {
@@ -82,11 +104,14 @@ int main(int argc, char** argv) {
 		}
 
 		// 3. Perform histogram equalisation
-		auto intensity_histogram = CreateIntensityHistogram(program, context, queue, image_input);
-		for (size_t intensity = 0; intensity < intensity_histogram.size(); intensity++)
+		auto intensity_histogram = create_intensity_histogram(program, context, queue, image_input);
+		auto cdf = histogram_to_normalised_cdf(program, context, queue, intensity_histogram);
+		for (size_t intensity = 0; intensity < cdf.size(); intensity++)
 		{
-			cout << "Intensity: " << intensity << ", count: " << intensity_histogram.at(intensity) << endl;
+			cout << "Intensity: " << intensity << ", count: " << cdf.at(intensity) << endl;
 		}
+
+		cout << "Width: " << image_input.width() << ", Height: " << image_input.height() << ", Pixels: " << image_input.width() * image_input.height() << endl;
 
 		// 4. Display output
 		//CImg<unsigned char> output_image(output_buffer.data(), image_input.width(), image_input.height(), image_input.depth(), image_input.spectrum());

@@ -1,17 +1,29 @@
 // 1. Create histogram containing image intensities.
 kernel void create_intensity_histogram(global const uchar* input, global int* output) {
 	int gid = get_global_id(0);
-	int intensity = input[id];
+	int intensity = input[gid];
 	atomic_inc(&output[intensity]);
 }
 
 // 2. Performs histogram equalisation, but does NOT apply it to an image
 // 3. Normalize cumulative histogram
 // 4. Map histogram colour intensities
-kernel void histogram_to_normalized_cdf(global const int* input, global int* output) {
+kernel void histogram_to_normalised_cdf(global int* input, global int* output) {
 	int gid = get_global_id(0);
-	int pixel_count = get_global_size(0) / 3;
 	// 2. Create cumulative histogram
+	int gsize = get_global_size(0);
+	global int* swap_buffer;
+	for (int stride = 1; stride <= gsize; stride *= 2) {
+		output[gid] = input[gid];
+		if (gid >= stride)
+			output[gid] += input[gid - stride];
+
+		barrier(CLK_GLOBAL_MEM_FENCE);
+
+		swap_buffer = input;
+		input = output;
+		output = swap_buffer;
+	}
 	// 3. Normalize cumulative histogram
 }
 
