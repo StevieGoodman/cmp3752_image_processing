@@ -1,15 +1,20 @@
-// Computes the frequency of each intensity value from the input image buffer and stores them in the output buffer.
-kernel void compute_histogram(global const uchar* input, global int output[256]) {
+// 1. Create histogram containing image intensities.
+kernel void create_intensity_histogram(global const uchar* input, global int* output) {
 	int id = get_global_id(0);
-	int image_size = get_global_size(0) / 3; // Each image consists of 3 colour channels
-	int colour_channel = id / image_size; // 0 - Y, 1 - Cb, 2 - Cr
-	if (colour_channel != 0) {
-		return;
-	}
 	int intensity = input[id];
 	atomic_inc(&output[intensity]);
 }
 
+// 2. Performs histogram equalisation, but does NOT apply it to an image
+// 3. Normalize cumulative histogram
+// 4. Map histogram colour intensities
+kernel void histogram_equalisation(global const int* input, global int* output) {
+	int lid = get_global_id(0);
+	int pixel_count = get_global_size(0) / 3;
+	// 2. Create cumulative histogram
+	// 3. Normalize cumulative histogram
+	// 4. Map histogram colour intensities
+}
 
 
 

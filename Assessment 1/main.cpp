@@ -1,3 +1,4 @@
+#pragma once
 #include <iostream>
 #include <vector>
 
@@ -14,6 +15,30 @@ void print_help() {
 	std::cerr << "  -l : list all platforms and devices" << std::endl;
 	std::cerr << "  -f : input image file (default: test.ppm)" << std::endl;
 	std::cerr << "  -h : print this message" << std::endl;
+}
+
+vector<int> CreateIntensityHistogram(cl::Program& program, cl::Context& context, cl::CommandQueue& queue, cimg_library::CImg<unsigned char> from) {
+	const int BIN_COUNT = 256 * sizeof(int);
+
+	// 1. Create buffers and load image to device memory
+	from = from.RGBtoYCbCr(); // Converts to YCbCr for simple intensity calculation
+	cl::Buffer input_buffer(context, CL_MEM_READ_ONLY, from.size());
+	cl::Buffer output_buffer(context, CL_MEM_READ_WRITE, BIN_COUNT);
+	queue.enqueueWriteBuffer(input_buffer, CL_TRUE, 0, from.size(), from.data());
+
+	// 2. Load and execute kernel
+	cl::Kernel kernel = cl::Kernel(program, "create_intensity_histogram");
+	kernel.setArg(0, input_buffer);
+	kernel.setArg(1, output_buffer);
+	cl::NDRange NDrange{ from.size() / 3 }; // Divide by number of channels to prevent repeat operations
+	queue.enqueueNDRangeKernel(kernel, cl::NullRange, NDrange, cl::NullRange);
+
+	// 3. Retrieve output from device memory
+	vector<int> histogram(BIN_COUNT / sizeof(int));
+	queue.enqueueReadBuffer(output_buffer, CL_TRUE, 0, BIN_COUNT, histogram.data());
+
+	// 4. Return result
+	return histogram;
 }
 
 int main(int argc, char** argv) {
@@ -34,28 +59,18 @@ int main(int argc, char** argv) {
 
 	//detect any potential exceptions
 	try {
+		// 1. Setup OpenlCL & CImg
 		CImg<unsigned char> image_input(image_filename.c_str());
 		CImgDisplay disp_input(image_input, "input");
-		image_input = image_input.RGBtoYCbCr(); // Converts to YCbCr for easy intensity calculation.
 
-		//Part 3 - host operations
-		//3.1 Select computing devices
 		cl::Context context = GetContext(platform_id, device_id);
-
-		//display the selected device
+		cl::CommandQueue queue(context);
+		cl::Program::Sources sources;
+		AddSources(sources, "kernels.cl");
+		cl::Program program(context, sources);
 		std::cout << "Running on " << GetPlatformName(platform_id) << ", " << GetDeviceName(platform_id, device_id) << std::endl;
 
-		//create a queue to which we will push commands for the device
-		cl::CommandQueue queue(context);
-
-		//3.2 Load & build the device code
-		cl::Program::Sources sources;
-
-		AddSources(sources, "kernels.cl");
-
-		cl::Program program(context, sources);
-
-		//build and debug the kernel code
+		// 2. Attempt to build kernels
 		try {
 			program.build();
 		}
@@ -66,33 +81,17 @@ int main(int argc, char** argv) {
 			throw err;
 		}
 
-		//Part 4 - device operations
+		// 3. Perform histogram equalisation
+		auto intensity_histogram = CreateIntensityHistogram(program, context, queue, image_input);
+		cout << intensity_histogram.size();
+		for (size_t intensity = 0; intensity < intensity_histogram.size(); intensity++)
+		{
+			cout << "Intensity: " << intensity << ", count: " << intensity_histogram.at(intensity) << endl;
+		}
 
-		//device - buffers
-		cl::Buffer dev_image_input(context, CL_MEM_READ_ONLY, image_input.size());
-		cl::Buffer histogram_output(context, CL_MEM_READ_WRITE, 256 * sizeof(int));
-		//cl::Buffer dev_image_output(context, CL_MEM_READ_WRITE, image_input.size()); //should be the same as input image
-
-		//4.1 Copy images to device memory
-		queue.enqueueWriteBuffer(dev_image_input, CL_TRUE, 0, image_input.size(), image_input.data());
-
-		//4.2 Setup and execute the kernel (i.e. device code)
-		cl::Kernel kernel = cl::Kernel(program, "compute_histogram");
-		kernel.setArg(0, dev_image_input);
-		kernel.setArg(1, histogram_output);
-		queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(image_input.size()), cl::NullRange);
-		
-		//4.3 Copy the result from device to host
-		vector<int> output_buffer(256);
-		queue.enqueueReadBuffer(histogram_output, CL_TRUE, 0, 256 * sizeof(int), output_buffer.data());
-
+		// 4. Display output
 		//CImg<unsigned char> output_image(output_buffer.data(), image_input.width(), image_input.height(), image_input.depth(), image_input.spectrum());
 		//CImgDisplay disp_output(output_image, "output");
-
-		for (size_t intensity = 0; intensity < output_buffer.size(); intensity++)
-		{
-			cout << "Intensity: " << intensity << ", count: " << static_cast<int>(output_buffer.at(intensity)) << endl;
-		}
 
 		while (!disp_input.is_closed()
 			&& !disp_input.is_keyESC()) {

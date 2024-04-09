@@ -1,2 +1,0 @@
-﻿C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Microsoft\VC\v170\Microsoft.CppBuild.targets(531,5): warning MSB8028: The intermediate directory (x64\Debug\) contains files shared from another project (Tutorial 2.vcxproj).  This can lead to incorrect clean and rebuild behavior.
-  Assessment 1.vcxproj -> C:\Users\Computing\source\repos\cmp3752_image_processing\x64\Debug\Assessment 1\Assessment 1.exe
