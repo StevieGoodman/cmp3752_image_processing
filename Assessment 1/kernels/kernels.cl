@@ -29,8 +29,7 @@ kernel void cumulate_histogram(global int* input, global int* output) {
 kernel void map_cumulative_histogram_to_image(global const uchar* input_image, global const int* histogram, global uchar* output_image) {
 	int gid = get_global_id(0);
 	const int PIXEL_COUNT = get_global_size(0);
-	output_image[gid] = ((float)input_image[gid] / (float)PIXEL_COUNT) * 256;     // Y channel
+	output_image[gid] = ((float)histogram[input_image[gid]] / (float)PIXEL_COUNT) * 256;     // Y channel
 	output_image[PIXEL_COUNT + gid] = input_image[PIXEL_COUNT + gid];             // Cb channel
 	output_image[(2 * PIXEL_COUNT) + gid] = input_image[(2 * PIXEL_COUNT) + gid]; // Cr channel
-	printf("Intensity1: %d, Intensity2: %d\n", input_image[gid], output_image[gid]);
 }
