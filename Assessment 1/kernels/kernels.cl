@@ -5,7 +5,7 @@ kernel void create_intensity_histogram(global const uchar* input, global int* ou
 	atomic_inc(&output[intensity]);
 }
 
-// 2. Creates a culumative histogram from a non-cumulative histogram by employing a Hillis-Steele scan
+// 2. Creates a cumulative histogram from a non-cumulative histogram by employing a Hillis-Steele scan
 // NOTE: Is "cumultate" even a verb? Oh well!
 kernel void cumulate_histogram(global int* input, global int* output) {
 	int gid = get_global_id(0);
