@@ -41,7 +41,7 @@ vector<int> create_intensity_histogram(cl::Program& program, cl::Context& contex
 	return histogram;
 }
 
-vector<int> cumulate_histogram(cl::Program& program, cl::Context& context, cl::CommandQueue& queue, vector<int> histogram) {
+vector<float> cumulate_histogram(cl::Program& program, cl::Context& context, cl::CommandQueue& queue, vector<int> histogram) {
 	const int BUFFER_SIZE = histogram.size() * sizeof(int);
 
 	// 1. Create buffers and load image to device memory
@@ -56,20 +56,21 @@ vector<int> cumulate_histogram(cl::Program& program, cl::Context& context, cl::C
 	queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(256), cl::NullRange);
 
 	// 3. Retrieve output from device memory
-	vector<int> cumulative_histogram(histogram.size());
+	vector<float> cumulative_histogram(histogram.size());
 	queue.enqueueReadBuffer(output_buffer, CL_TRUE, 0, BUFFER_SIZE, cumulative_histogram.data());
 
 	// 4. Return result
 	return cumulative_histogram;
 }
 
-CImg<unsigned char> map_cumulative_histogram_to_image(cl::Program& program, cl::Context& context, cl::CommandQueue& queue, cimg_library::CImg<unsigned char> input_image, vector<int> cumulative_histogram) {
+CImg<unsigned char> map_cumulative_histogram_to_image(cl::Program& program, cl::Context& context, cl::CommandQueue& queue, cimg_library::CImg<unsigned char> input_image, vector<float> cumulative_histogram) {
 	const int HISTOGRAM_SIZE = cumulative_histogram.size() * sizeof(int);
 
 	// 1. Create buffers and load image to device memory
 	cl::Buffer input_image_buffer(context, CL_MEM_READ_ONLY, input_image.size());
 	cl::Buffer input_histogram_buffer(context, CL_MEM_READ_ONLY, HISTOGRAM_SIZE);
 	cl::Buffer output_buffer(context, CL_MEM_READ_WRITE, input_image.size());
+	input_image = input_image.RGBtoYCbCr();
 	queue.enqueueWriteBuffer(input_image_buffer, CL_TRUE, 0, input_image.size(), input_image.data());
 	queue.enqueueWriteBuffer(input_histogram_buffer, CL_TRUE, 0, HISTOGRAM_SIZE, cumulative_histogram.data());
 
@@ -78,7 +79,7 @@ CImg<unsigned char> map_cumulative_histogram_to_image(cl::Program& program, cl::
 	kernel.setArg(0, input_image_buffer);
 	kernel.setArg(1, input_histogram_buffer);
 	kernel.setArg(2, output_buffer);
-	queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(input_image.size()), cl::NullRange);
+	queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(input_image.size() / 3), cl::NullRange);
 
 	// 3. Retrieve output from device memory
 	vector<unsigned char> image_data(input_image.size());
@@ -86,6 +87,7 @@ CImg<unsigned char> map_cumulative_histogram_to_image(cl::Program& program, cl::
 	CImg<unsigned char> output_image(image_data.data(), input_image.width(), input_image.height(), input_image.depth(), input_image.spectrum());
 
 	// 4. Return result
+	output_image.YCbCrtoRGB();
 	return output_image;
 }
 
