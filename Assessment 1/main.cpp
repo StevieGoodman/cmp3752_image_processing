@@ -57,7 +57,7 @@ vector<int> cumulate_histogram(cl::Program& program, cl::Context& context, cl::C
 
 	// 3. Retrieve output from device memory
 	vector<int> cumulative_histogram(histogram.size());
-	queue.enqueueReadBuffer(output_buffer, CL_TRUE, 0, BUFFER_SIZE, cdf.data());
+	queue.enqueueReadBuffer(output_buffer, CL_TRUE, 0, BUFFER_SIZE, cumulative_histogram.data());
 
 	// 4. Return result
 	return cumulative_histogram;
