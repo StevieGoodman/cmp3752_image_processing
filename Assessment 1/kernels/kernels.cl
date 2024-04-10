@@ -12,7 +12,7 @@ kernel void create_intensity_histogram(global const uchar* input, global int* ou
 }
 
 // 2. Creates a cumulative histogram from a non-cumulative histogram by employing a Hillis-Steele scan
-// NOTE: Is "cumulate" even a verb? Oh well!
+// NOTE: Is "cumulate" even a verb? Too bad!
 kernel void cumulate_histogram(global int* input, global int* output) {
 	int GID = get_global_id(0);
 	int BIN_COUNT = get_global_size(0);
@@ -40,6 +40,7 @@ kernel void cumulate_histogram(global int* input, global int* output) {
 kernel void map_cumulative_histogram_to_image(global const uchar* input_image, global const int* histogram, global uchar* output_image) {
 	const int GID = get_global_id(0);
 	const int PIXEL_COUNT = get_global_size(0);
+	// Prepare for... unforeseen consequencessss, Dr Freeman...
 	int red_value = (int)(((float)histogram[input_image[GID]] / (float)PIXEL_COUNT) * 255);
 	int green_value = (int)(((float)histogram[input_image[GID+PIXEL_COUNT] + 256] / (float)PIXEL_COUNT) * 255);
 	int blue_value = (int)(((float)histogram[input_image[GID + PIXEL_COUNT*2] + 512] / (float)PIXEL_COUNT) * 255);
