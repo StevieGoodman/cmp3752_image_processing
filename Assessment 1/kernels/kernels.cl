@@ -40,7 +40,6 @@ kernel void cumulate_histogram(global int* input, global int* output) {
 kernel void map_cumulative_histogram_to_image(global const uchar* input_image, global const int* histogram, global uchar* output_image) {
 	const int GID = get_global_id(0);
 	const int PIXEL_COUNT = get_global_size(0);
-	//printf("Red intensity: %d, counted red value: %d, adjusted value: %d\n", input_image[GID], histogram[input_image[GID]], );
 	int red_value = (int)(((float)histogram[input_image[GID]] / (float)PIXEL_COUNT) * 255);
 	int green_value = (int)(((float)histogram[input_image[GID+PIXEL_COUNT] + 256] / (float)PIXEL_COUNT) * 255);
 	int blue_value = (int)(((float)histogram[input_image[GID + PIXEL_COUNT*2] + 512] / (float)PIXEL_COUNT) * 255);
