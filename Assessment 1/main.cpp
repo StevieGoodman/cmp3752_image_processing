@@ -18,25 +18,33 @@ void print_help() {
 }
 
 vector<int> create_intensity_histogram(cl::Program& program, cl::Context& context, cl::CommandQueue& queue, cimg_library::CImg<unsigned char> from) {
-	const int BIN_COUNT = 256;
+	int BIN_COUNT = 256; // Try as I might, I cannot figure out how to implement 16-bit colour support in any elegant way. I have to manually edit the types of the CImg object, otherwise it doesn't render correctly.
 
 	// 1. Create buffers and load image to device memory
 	cl::Buffer input_buffer(context, CL_MEM_READ_ONLY, from.size());
 	cl::Buffer output_buffer(context, CL_MEM_READ_WRITE, BIN_COUNT * 3 * sizeof(int)); // Multiply by 3 because we create one histogram for each colour channel
-	queue.enqueueWriteBuffer(input_buffer, CL_TRUE, 0, from.size(), from.data());
+	cl::Event input_event;
+	queue.enqueueWriteBuffer(input_buffer, CL_TRUE, 0, from.size(), from.data(), NULL, &input_event);
 
 	// 2. Load and execute kernel
 	cl::Kernel kernel = cl::Kernel(program, "create_intensity_histogram");
 	kernel.setArg(0, input_buffer);
 	kernel.setArg(1, output_buffer);
 	cl::NDRange NDrange{ from.size() / 3 }; // Divide by number of channels to prevent repeat operations
-	queue.enqueueNDRangeKernel(kernel, cl::NullRange, NDrange, cl::NullRange);
+	cl::Event kernel_event;
+	queue.enqueueNDRangeKernel(kernel, cl::NullRange, NDrange, cl::NullRange, NULL, &kernel_event);
+	
 
 	// 3. Retrieve output from device memory
 	vector<int> histogram(BIN_COUNT * 3); // Multiply by 3 because we create one histogram for each colour channel
-	queue.enqueueReadBuffer(output_buffer, CL_TRUE, 0, BIN_COUNT * 3 * sizeof(int), histogram.data());
+	cl::Event output_event;
+	queue.enqueueReadBuffer(output_buffer, CL_TRUE, 0, BIN_COUNT * 3 * sizeof(int), histogram.data(), NULL, &output_event);
 
 	// 4. Return result
+	cout << "[ CREATE INTENSITY HISTOGRAM ]" << endl;
+	cout << "Load image buffer: " << GetFullProfilingInfo(input_event, PROF_US) << endl;
+	cout << "Generate intensity histogram: " << GetFullProfilingInfo(kernel_event, PROF_US) << endl;
+	cout << "Retrieve histogram : " << GetFullProfilingInfo(output_event, PROF_US) << endl;
 	return histogram;
 }
 
@@ -46,20 +54,27 @@ vector<int> cumulate_histogram(cl::Program& program, cl::Context& context, cl::C
 	// 1. Create buffers and load image to device memory
 	cl::Buffer input_buffer(context, CL_MEM_READ_WRITE, BUFFER_SIZE);
 	cl::Buffer output_buffer(context, CL_MEM_READ_WRITE, BUFFER_SIZE);
-	queue.enqueueWriteBuffer(input_buffer, CL_TRUE, 0, BUFFER_SIZE, histogram.data());
+	cl::Event input_event;
+	queue.enqueueWriteBuffer(input_buffer, CL_TRUE, 0, BUFFER_SIZE, histogram.data(), NULL, &input_event);
 
 	// 2. Load and execute kernel
 	cl::Kernel kernel = cl::Kernel(program, "cumulate_histogram");
 	kernel.setArg(0, input_buffer);
 	kernel.setArg(1, output_buffer);
 	cl::NDRange NDrange{ histogram.size() / 3 }; // Divide by number of channels to prevent repeat operations
-	queue.enqueueNDRangeKernel(kernel, cl::NullRange, NDrange, cl::NullRange);
+	cl::Event kernel_event;
+	queue.enqueueNDRangeKernel(kernel, cl::NullRange, NDrange, cl::NullRange, NULL, &kernel_event);
 
 	// 3. Retrieve output from device memory
 	vector<int> cumulative_histogram(histogram.size());
-	queue.enqueueReadBuffer(output_buffer, CL_TRUE, 0, BUFFER_SIZE, cumulative_histogram.data());
+	cl::Event output_event;
+	queue.enqueueReadBuffer(output_buffer, CL_TRUE, 0, BUFFER_SIZE, cumulative_histogram.data(), NULL, &output_event);
 
 	// 4. Return result
+	cout << "[ CUMULATE HISTOGRAM ]" << endl;
+	cout << "Load histogram buffer: " << GetFullProfilingInfo(input_event, PROF_US) << endl;
+	cout << "Generate cumulative histogram: " << GetFullProfilingInfo(kernel_event, PROF_US) << endl;
+	cout << "Retrieve cumulative histogram : " << GetFullProfilingInfo(output_event, PROF_US) << endl;
 	return cumulative_histogram;
 }
 
@@ -70,22 +85,31 @@ CImg<unsigned char> map_cumulative_histogram_to_image(cl::Program& program, cl::
 	cl::Buffer input_image_buffer(context, CL_MEM_READ_ONLY, input_image.size());
 	cl::Buffer input_histogram_buffer(context, CL_MEM_READ_ONLY, HISTOGRAM_SIZE);
 	cl::Buffer output_buffer(context, CL_MEM_READ_WRITE, input_image.size());
-	queue.enqueueWriteBuffer(input_image_buffer, CL_TRUE, 0, input_image.size(), input_image.data());
-	queue.enqueueWriteBuffer(input_histogram_buffer, CL_TRUE, 0, HISTOGRAM_SIZE, cumulative_histogram.data());
+	cl::Event input_image_event;
+	cl::Event input_histogram_event;
+	queue.enqueueWriteBuffer(input_image_buffer, CL_TRUE, 0, input_image.size(), input_image.data(), NULL, &input_image_event);
+	queue.enqueueWriteBuffer(input_histogram_buffer, CL_TRUE, 0, HISTOGRAM_SIZE, cumulative_histogram.data(), NULL, &input_histogram_event);
 
 	// 2. Load and execute kernel
 	cl::Kernel kernel = cl::Kernel(program, "map_cumulative_histogram_to_image");
 	kernel.setArg(0, input_image_buffer);
 	kernel.setArg(1, input_histogram_buffer);
 	kernel.setArg(2, output_buffer);
-	queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(input_image.size() / 3), cl::NullRange);
+	cl::Event kernel_event;
+	queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(input_image.size() / 3), cl::NullRange, NULL, &kernel_event);
 
 	// 3. Retrieve output from device memory
 	vector<unsigned char> image_data(input_image.size());
-	queue.enqueueReadBuffer(output_buffer, CL_TRUE, 0, input_image.size(), image_data.data());
+	cl::Event output_event;
+	queue.enqueueReadBuffer(output_buffer, CL_TRUE, 0, input_image.size(), image_data.data(), NULL, &output_event);
 	CImg<unsigned char> output_image(image_data.data(), input_image.width(), input_image.height(), input_image.depth(), input_image.spectrum());
 
 	// 4. Return result
+	cout << "[ MAP CUMULATIVE HISTOGRAM TO IMAGE ]" << endl;
+	cout << "Load image buffer: " << GetFullProfilingInfo(input_image_event, PROF_US) << endl;
+	cout << "Load histogram buffer: " << GetFullProfilingInfo(input_histogram_event, PROF_US) << endl;
+	cout << "Generate modified image: " << GetFullProfilingInfo(kernel_event, PROF_US) << endl;
+	cout << "Retrieve modified image : " << GetFullProfilingInfo(output_event, PROF_US) << endl;
 	return output_image;
 }
 
@@ -93,7 +117,7 @@ int main(int argc, char** argv) {
 	//Part 1 - handle command line options such as device selection, verbosity, etc.
 	int platform_id = 0;
 	int device_id = 0;
-	string image_filename = "test.ppm";
+	string image_filename = "test_large.ppm";
 
 	for (int i = 1; i < argc; i++) {
 		if ((strcmp(argv[i], "-p") == 0) && (i < (argc - 1))) { platform_id = atoi(argv[++i]); }
@@ -112,7 +136,7 @@ int main(int argc, char** argv) {
 		CImgDisplay disp_input(image_input, "input");
 
 		cl::Context context = GetContext(platform_id, device_id);
-		cl::CommandQueue queue(context);
+		cl::CommandQueue queue(context, CL_QUEUE_PROFILING_ENABLE);
 		cl::Program::Sources sources;
 		AddSources(sources, "kernels.cl");
 		cl::Program program(context, sources);

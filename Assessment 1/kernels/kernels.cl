@@ -8,7 +8,7 @@ kernel void create_intensity_histogram(global const uchar* input, global int* ou
 	int blue_intensity = input[GID + PIXEL_COUNT*2];
 	atomic_inc(&output[red_intensity]);
 	atomic_inc(&output[green_intensity + 256]);
-	atomic_inc(&output[blue_intensity + 256*2]);
+	atomic_inc(&output[blue_intensity + 256 * 2]);
 }
 
 // 2. Creates a cumulative histogram from a non-cumulative histogram by employing a Hillis-Steele scan
@@ -18,7 +18,7 @@ kernel void cumulate_histogram(global int* input, global int* output) {
 	int BIN_COUNT = get_global_size(0);
 	global int* swap_buffer;
 	for (int stride = 1; stride <= BIN_COUNT; stride *= 2) {
-		output[GID]                 = input[GID];                  // R Channel
+		output[GID]                 = input[GID];                 // R Channel
 		output[GID + BIN_COUNT]     = input[GID + BIN_COUNT];     // G Channel
 		output[GID + BIN_COUNT * 2] = input[GID + BIN_COUNT * 2]; // B Channel
 		if (GID >= stride) {

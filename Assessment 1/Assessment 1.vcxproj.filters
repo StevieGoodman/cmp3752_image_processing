@@ -18,6 +18,10 @@
     <CopyFileToFolders Include="kernels\kernels.cl" />
     <CopyFileToFolders Include="images\test.ppm" />
     <CopyFileToFolders Include="images\test_large.ppm" />
+    <CopyFileToFolders Include="images\test_large.pgm" />
+    <CopyFileToFolders Include="images\mdr16-gs.pgm" />
+    <CopyFileToFolders Include="images\test.pgm" />
+    <CopyFileToFolders Include="images\mdr16.ppm" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
