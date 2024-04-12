@@ -175,11 +175,6 @@ int main(int argc, char** argv) {
 		auto cumulative_histogram = cumulate_histogram(program, context, queue, intensity_histogram, image_input.spectrum());
 		auto output_image = map_cumulative_histogram_to_image(program, context, queue, image_input, cumulative_histogram);
 
-		for (size_t i = 0; i < intensity_histogram.size(); i++)
-		{
-			cout << "Intensity: " << i << ", count: " << intensity_histogram[i] << endl;
-		}
-
 		// 4. Display output
 		CImgDisplay disp_output(output_image, "output");
 
