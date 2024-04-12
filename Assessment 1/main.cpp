@@ -18,22 +18,22 @@ void print_help() {
 }
 
 vector<int> create_intensity_histogram(cl::Program& program, cl::Context& context, cl::CommandQueue& queue, cimg_library::CImg<unsigned char> from) {
-	int BIN_COUNT = 256; // Try as I might, I cannot figure out how to implement 16-bit colour support in any elegant way. I have to manually edit the types of the CImg object, otherwise it doesn't render correctly.
+	int BIN_COUNT = from.max();
 
 	// 1. Create buffers and load image to device memory
 	cl::Buffer input_buffer(context, CL_MEM_READ_ONLY, from.size());
 	cl::Buffer output_buffer(context, CL_MEM_READ_WRITE, BIN_COUNT * from.spectrum() * sizeof(int)); // Multiply by channels because we create one histogram for each colour channel
-	cl::Buffer channel_count_buffer(context, CL_MEM_READ_WRITE, sizeof(int));
+	cl::Buffer image_data_buffer(context, CL_MEM_READ_WRITE, sizeof(int) * 2);
 	cl::Event input_event;
 	queue.enqueueWriteBuffer(input_buffer, CL_TRUE, 0, from.size(), from.data(), NULL, &input_event);
-	vector<int> channel_count{ from.spectrum() };
-	queue.enqueueWriteBuffer(channel_count_buffer, CL_TRUE, 0, sizeof(int), channel_count.data());
+	vector<int> image_data{ from.max(), from.spectrum() };
+	queue.enqueueWriteBuffer(image_data_buffer, CL_TRUE, 0, sizeof(int) * image_data.size(), image_data.data());
 
 	// 2. Load and execute kernel
 	cl::Kernel kernel = cl::Kernel(program, "create_intensity_histogram");
 	kernel.setArg(0, input_buffer);
 	kernel.setArg(1, output_buffer);
-	kernel.setArg(2, channel_count_buffer);
+	kernel.setArg(2, image_data_buffer);
 	cl::NDRange NDrange{ from.size() / from.spectrum() }; // Divide by number of channels to prevent repeat operations
 	cl::Event kernel_event;
 	queue.enqueueNDRangeKernel(kernel, cl::NullRange, NDrange, cl::NullRange, NULL, &kernel_event);
@@ -93,28 +93,28 @@ CImg<unsigned char> map_cumulative_histogram_to_image(cl::Program& program, cl::
 	cl::Buffer input_image_buffer(context, CL_MEM_READ_ONLY, input_image.size());
 	cl::Buffer input_histogram_buffer(context, CL_MEM_READ_ONLY, HISTOGRAM_SIZE);
 	cl::Buffer output_buffer(context, CL_MEM_READ_WRITE, input_image.size());
-	cl::Buffer channel_count_buffer(context, CL_MEM_READ_ONLY, sizeof(int));
+	cl::Buffer image_data_buffer(context, CL_MEM_READ_ONLY, sizeof(int) * 2);
 	cl::Event input_image_event;
 	cl::Event input_histogram_event;
 	queue.enqueueWriteBuffer(input_image_buffer, CL_TRUE, 0, input_image.size(), input_image.data(), NULL, &input_image_event);
 	queue.enqueueWriteBuffer(input_histogram_buffer, CL_TRUE, 0, HISTOGRAM_SIZE, cumulative_histogram.data(), NULL, &input_histogram_event);
-	vector<int> channel_count{ input_image.spectrum() };
-	queue.enqueueWriteBuffer(channel_count_buffer, CL_TRUE, 0, sizeof(int), channel_count.data());
+	vector<int> image_data{ input_image.max(), input_image.spectrum() };
+	queue.enqueueWriteBuffer(image_data_buffer, CL_TRUE, 0, sizeof(int) * image_data.size(), image_data.data());
 
 	// 2. Load and execute kernel
 	cl::Kernel kernel = cl::Kernel(program, "map_cumulative_histogram_to_image");
 	kernel.setArg(0, input_image_buffer);
 	kernel.setArg(1, input_histogram_buffer);
 	kernel.setArg(2, output_buffer);
-	kernel.setArg(3, channel_count_buffer);
+	kernel.setArg(3, image_data_buffer);
 	cl::Event kernel_event;
 	queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(input_image.size() / input_image.spectrum()), cl::NullRange, NULL, &kernel_event);
 
 	// 3. Retrieve output from device memory
-	vector<unsigned char> image_data(input_image.size());
+	vector<unsigned char> image(input_image.size());
 	cl::Event output_event;
-	queue.enqueueReadBuffer(output_buffer, CL_TRUE, 0, input_image.size(), image_data.data(), NULL, &output_event);
-	CImg<unsigned char> output_image(image_data.data(), input_image.width(), input_image.height(), input_image.depth(), input_image.spectrum());
+	queue.enqueueReadBuffer(output_buffer, CL_TRUE, 0, input_image.size(), image.data(), NULL, &output_event);
+	CImg<unsigned char> output_image(image.data(), input_image.width(), input_image.height(), input_image.depth(), input_image.spectrum());
 
 	// 4. Return result
 	cout << "[ MAP CUMULATIVE HISTOGRAM TO IMAGE ]" << endl;
@@ -129,7 +129,7 @@ int main(int argc, char** argv) {
 	//Part 1 - handle command line options such as device selection, verbosity, etc.
 	int platform_id = 0;
 	int device_id = 0;
-	string image_filename = "test_large.pgm";
+	string image_filename = "test.pgm";
 
 	for (int i = 1; i < argc; i++) {
 		if ((strcmp(argv[i], "-p") == 0) && (i < (argc - 1))) { platform_id = atoi(argv[++i]); }
@@ -144,7 +144,12 @@ int main(int argc, char** argv) {
 	//detect any potential exceptions
 	try {
 		// 1. Setup OpenlCL & CImg
+		CImg<unsigned short> image_query(image_filename.c_str());
 		CImg<unsigned char> image_input(image_filename.c_str());
+		bool bit16 = image_query.max() == 65535; // Perform 16-to-8 bit conversion if necessary
+		if (bit16)
+			image_input = image_query.normalize(0, 255);
+
 		CImgDisplay disp_input(image_input, "input");
 
 		cl::Context context = GetContext(platform_id, device_id);
@@ -170,8 +175,9 @@ int main(int argc, char** argv) {
 		auto cumulative_histogram = cumulate_histogram(program, context, queue, intensity_histogram, image_input.spectrum());
 		auto output_image = map_cumulative_histogram_to_image(program, context, queue, image_input, cumulative_histogram);
 
-		for (int i = 0; i < intensity_histogram.size(); i++) {
-			cout << "Intensity: " << i << ", count: " << intensity_histogram.at(i) << endl;
+		for (size_t i = 0; i < intensity_histogram.size(); i++)
+		{
+			cout << "Intensity: " << i << ", count: " << intensity_histogram[i] << endl;
 		}
 
 		// 4. Display output
