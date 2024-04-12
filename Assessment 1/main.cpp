@@ -129,7 +129,7 @@ int main(int argc, char** argv) {
 	//Part 1 - handle command line options such as device selection, verbosity, etc.
 	int platform_id = 0;
 	int device_id = 0;
-	string image_filename = "test.pgm";
+	string image_filename = "test.pgm"; // Valid: test.pgm, test.ppm, test_large.pgm, test_large.ppm, mdr-16.ppm | Invalid: mdr16-gs.pgm (not even sure how??)
 
 	for (int i = 1; i < argc; i++) {
 		if ((strcmp(argv[i], "-p") == 0) && (i < (argc - 1))) { platform_id = atoi(argv[++i]); }
