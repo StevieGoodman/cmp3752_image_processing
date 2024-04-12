@@ -52,20 +52,24 @@ vector<int> create_intensity_histogram(cl::Program& program, cl::Context& contex
 	return histogram;
 }
 
-vector<int> cumulate_histogram(cl::Program& program, cl::Context& context, cl::CommandQueue& queue, vector<int> histogram) {
+vector<int> cumulate_histogram(cl::Program& program, cl::Context& context, cl::CommandQueue& queue, vector<int> histogram, int channels) {
 	const int BUFFER_SIZE = histogram.size() * sizeof(int);
 
 	// 1. Create buffers and load image to device memory
 	cl::Buffer input_buffer(context, CL_MEM_READ_WRITE, BUFFER_SIZE);
 	cl::Buffer output_buffer(context, CL_MEM_READ_WRITE, BUFFER_SIZE);
+	cl::Buffer channel_count_buffer(context, CL_MEM_READ_ONLY, sizeof(int));
 	cl::Event input_event;
 	queue.enqueueWriteBuffer(input_buffer, CL_TRUE, 0, BUFFER_SIZE, histogram.data(), NULL, &input_event);
+	std::vector<int> channel_count_vector{ channels };
+	queue.enqueueWriteBuffer(channel_count_buffer, CL_TRUE, 0, sizeof(int), channel_count_vector.data());
 
 	// 2. Load and execute kernel
 	cl::Kernel kernel = cl::Kernel(program, "cumulate_histogram");
 	kernel.setArg(0, input_buffer);
 	kernel.setArg(1, output_buffer);
-	cl::NDRange NDrange{ histogram.size() / 3 }; // Divide by number of channels to prevent repeat operations
+	kernel.setArg(2, channel_count_buffer);
+	cl::NDRange NDrange{ histogram.size() / channels }; // Divide by number of channels to prevent repeat operations
 	cl::Event kernel_event;
 	queue.enqueueNDRangeKernel(kernel, cl::NullRange, NDrange, cl::NullRange, NULL, &kernel_event);
 
@@ -89,18 +93,22 @@ CImg<unsigned char> map_cumulative_histogram_to_image(cl::Program& program, cl::
 	cl::Buffer input_image_buffer(context, CL_MEM_READ_ONLY, input_image.size());
 	cl::Buffer input_histogram_buffer(context, CL_MEM_READ_ONLY, HISTOGRAM_SIZE);
 	cl::Buffer output_buffer(context, CL_MEM_READ_WRITE, input_image.size());
+	cl::Buffer channel_count_buffer(context, CL_MEM_READ_ONLY, sizeof(int));
 	cl::Event input_image_event;
 	cl::Event input_histogram_event;
 	queue.enqueueWriteBuffer(input_image_buffer, CL_TRUE, 0, input_image.size(), input_image.data(), NULL, &input_image_event);
 	queue.enqueueWriteBuffer(input_histogram_buffer, CL_TRUE, 0, HISTOGRAM_SIZE, cumulative_histogram.data(), NULL, &input_histogram_event);
+	vector<int> channel_count{ input_image.spectrum() };
+	queue.enqueueWriteBuffer(channel_count_buffer, CL_TRUE, 0, sizeof(int), channel_count.data());
 
 	// 2. Load and execute kernel
 	cl::Kernel kernel = cl::Kernel(program, "map_cumulative_histogram_to_image");
 	kernel.setArg(0, input_image_buffer);
 	kernel.setArg(1, input_histogram_buffer);
 	kernel.setArg(2, output_buffer);
+	kernel.setArg(3, channel_count_buffer);
 	cl::Event kernel_event;
-	queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(input_image.size() / 3), cl::NullRange, NULL, &kernel_event);
+	queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(input_image.size() / input_image.spectrum()), cl::NullRange, NULL, &kernel_event);
 
 	// 3. Retrieve output from device memory
 	vector<unsigned char> image_data(input_image.size());
@@ -121,7 +129,7 @@ int main(int argc, char** argv) {
 	//Part 1 - handle command line options such as device selection, verbosity, etc.
 	int platform_id = 0;
 	int device_id = 0;
-	string image_filename = "test_large.ppm";
+	string image_filename = "test_large.pgm";
 
 	for (int i = 1; i < argc; i++) {
 		if ((strcmp(argv[i], "-p") == 0) && (i < (argc - 1))) { platform_id = atoi(argv[++i]); }
@@ -159,8 +167,12 @@ int main(int argc, char** argv) {
 
 		// 3. Perform histogram equalisation
 		auto intensity_histogram = create_intensity_histogram(program, context, queue, image_input);
-		auto cumulative_histogram = cumulate_histogram(program, context, queue, intensity_histogram);
+		auto cumulative_histogram = cumulate_histogram(program, context, queue, intensity_histogram, image_input.spectrum());
 		auto output_image = map_cumulative_histogram_to_image(program, context, queue, image_input, cumulative_histogram);
+
+		for (int i = 0; i < intensity_histogram.size(); i++) {
+			cout << "Intensity: " << i << ", count: " << intensity_histogram.at(i) << endl;
+		}
 
 		// 4. Display output
 		CImgDisplay disp_output(output_image, "output");
