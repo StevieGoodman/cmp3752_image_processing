@@ -1,14 +1,12 @@
 // 1. Create histograms containing image intensities for each of the 3 colour channels.
 // The output array is comprised of 3 contiguous intensity histograms
-kernel void create_intensity_histogram(global const uchar* input, global int* output) {
+kernel void create_intensity_histogram(global const uchar* input, global int* output, global int* channel_count) {
 	const int GID = get_global_id(0);
 	const int PIXEL_COUNT = get_global_size(0);
-	int red_intensity = input[GID];
-	int green_intensity = input[GID + PIXEL_COUNT];
-	int blue_intensity = input[GID + PIXEL_COUNT*2];
-	atomic_inc(&output[red_intensity]);
-	atomic_inc(&output[green_intensity + 256]);
-	atomic_inc(&output[blue_intensity + 256 * 2]);
+	for (int channel = 0; channel < channel_count[0]; channel++) {
+		int intensity = input[GID + (PIXEL_COUNT * channel)];
+		atomic_inc(&output[intensity]);
+	}
 }
 
 // 2. Creates a cumulative histogram from a non-cumulative histogram by employing a Hillis-Steele scan

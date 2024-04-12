@@ -22,29 +22,33 @@ vector<int> create_intensity_histogram(cl::Program& program, cl::Context& contex
 
 	// 1. Create buffers and load image to device memory
 	cl::Buffer input_buffer(context, CL_MEM_READ_ONLY, from.size());
-	cl::Buffer output_buffer(context, CL_MEM_READ_WRITE, BIN_COUNT * 3 * sizeof(int)); // Multiply by 3 because we create one histogram for each colour channel
+	cl::Buffer output_buffer(context, CL_MEM_READ_WRITE, BIN_COUNT * from.spectrum() * sizeof(int)); // Multiply by channels because we create one histogram for each colour channel
+	cl::Buffer channel_count_buffer(context, CL_MEM_READ_WRITE, sizeof(int));
 	cl::Event input_event;
 	queue.enqueueWriteBuffer(input_buffer, CL_TRUE, 0, from.size(), from.data(), NULL, &input_event);
+	vector<int> channel_count{ from.spectrum() };
+	queue.enqueueWriteBuffer(channel_count_buffer, CL_TRUE, 0, sizeof(int), channel_count.data());
 
 	// 2. Load and execute kernel
 	cl::Kernel kernel = cl::Kernel(program, "create_intensity_histogram");
 	kernel.setArg(0, input_buffer);
 	kernel.setArg(1, output_buffer);
-	cl::NDRange NDrange{ from.size() / 3 }; // Divide by number of channels to prevent repeat operations
+	kernel.setArg(2, channel_count_buffer);
+	cl::NDRange NDrange{ from.size() / from.spectrum() }; // Divide by number of channels to prevent repeat operations
 	cl::Event kernel_event;
 	queue.enqueueNDRangeKernel(kernel, cl::NullRange, NDrange, cl::NullRange, NULL, &kernel_event);
-	
 
 	// 3. Retrieve output from device memory
-	vector<int> histogram(BIN_COUNT * 3); // Multiply by 3 because we create one histogram for each colour channel
+	vector<int> histogram(BIN_COUNT * from.spectrum()); // Multiply by 3 because we create one histogram for each colour channel
 	cl::Event output_event;
-	queue.enqueueReadBuffer(output_buffer, CL_TRUE, 0, BIN_COUNT * 3 * sizeof(int), histogram.data(), NULL, &output_event);
+	queue.enqueueReadBuffer(output_buffer, CL_TRUE, 0, BIN_COUNT * from.spectrum() * sizeof(int), histogram.data(), NULL, &output_event);
 
 	// 4. Return result
 	cout << "[ CREATE INTENSITY HISTOGRAM ]" << endl;
 	cout << "Load image buffer: " << GetFullProfilingInfo(input_event, PROF_US) << endl;
 	cout << "Generate intensity histogram: " << GetFullProfilingInfo(kernel_event, PROF_US) << endl;
 	cout << "Retrieve histogram : " << GetFullProfilingInfo(output_event, PROF_US) << endl;
+
 	return histogram;
 }
 
