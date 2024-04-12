@@ -3,7 +3,6 @@
 kernel void create_intensity_histogram(global const uchar* input, global int* output, global int* image_data) {
 	const int BIT_DEPTH = image_data[0];
 	const int CHANNEL_COUNT = image_data[1];
-	//printf("BIT DEPTH: %d, CHANNEL_COUNT: %d\n", BIT_DEPTH, CHANNEL_COUNT);
 	const int GID = get_global_id(0);
 	const int PIXEL_COUNT = get_global_size(0);
 	for (int channel = 0; channel < CHANNEL_COUNT; channel++) {
