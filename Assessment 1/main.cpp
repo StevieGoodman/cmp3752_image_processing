@@ -129,7 +129,7 @@ int main(int argc, char** argv) {
 	//Part 1 - handle command line options such as device selection, verbosity, etc.
 	int platform_id = 0;
 	int device_id = 0;
-	string image_filename = "test.pgm"; // Valid: test.pgm, test.ppm, test_large.pgm, test_large.ppm, mdr-16.ppm | Invalid: mdr16-gs.pgm (not even sure how??)
+	string image_filename = "mdr16-gs.pgm"; // Valid: test.pgm, test.ppm, test_large.pgm, test_large.ppm, mdr-16.ppm, mdr16-gs.pgm. NOTE: 16-bit images seem to have issues with high-intensity values, but I'm not quite sure why.
 
 	for (int i = 1; i < argc; i++) {
 		if ((strcmp(argv[i], "-p") == 0) && (i < (argc - 1))) { platform_id = atoi(argv[++i]); }
@@ -146,7 +146,7 @@ int main(int argc, char** argv) {
 		// 1. Setup OpenlCL & CImg
 		CImg<unsigned short> image_query(image_filename.c_str());
 		CImg<unsigned char> image_input(image_filename.c_str());
-		bool bit16 = image_query.max() == 65535; // Perform 16-to-8 bit conversion if necessary
+		bool bit16 = image_query.max() > 255; // Perform 16-to-8 bit conversion if necessary
 		if (bit16)
 			image_input = image_query.normalize(0, 255);
 
